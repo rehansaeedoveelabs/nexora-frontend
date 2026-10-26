@@ -266,7 +266,7 @@ function LocationsTable({ locations, selected, onToggle, onToggleAll, onType, on
                 label=${`Type for ${location.name}`}
                 hideLabel
                 value=${location.type ?? ''}
-                error=${location.needs_attention ? 'Choose a type' : null}
+                error=${location.needs_attention ? 'Needed before orders can route here' : null}
                 options=${[{ value: '', label: 'Choose a type…' }, ...TYPES]}
                 onChange=${(value) => onType(location, value)}
               />
