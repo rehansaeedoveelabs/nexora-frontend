@@ -52,7 +52,7 @@ export default function Home() {
   const { shop, setup } = state.session;
 
   return (
-    <s-page heading={shop.name ? `Welcome, ${shop.name}` : 'Home'}>
+    <s-page heading={shop.name ? `Welcome, ${shop.name}` : 'Home'} inlineSize="large">
       <s-stack gap="large">
         {shop.syncing && (
           <s-banner tone="info" heading="Importing your locations from Shopify">
@@ -121,16 +121,15 @@ function SetupStep({ step, index }) {
   const [tone, label, badgeIcon] = STEP_BADGE[step.status] ?? STEP_BADGE.incomplete;
   const showAction = step.action && step.status !== 'upcoming';
   const done = step.status === 'complete';
+  // Coloured icon per state: green when done, blue while actionable, muted when upcoming.
+  const iconTone = done ? 'success' : step.status === 'upcoming' ? 'subdued' : 'info';
 
   return (
     <s-box padding="base" background={step.status === 'upcoming' ? 'subdued' : 'base'}>
-      <s-grid gridTemplateColumns="auto 1fr" gap="base">
-        <s-box
-          padding="small-100"
-          borderRadius="base"
-          background={done ? 'strong' : 'subdued'}
-        >
-          <s-icon type={done ? 'check-circle' : (STEP_ICON[step.key] ?? 'settings')} tone={done ? 'success' : 'base'} />
+      {/* alignItems=start keeps the icon tile a neat square instead of stretching to the row height */}
+      <s-grid gridTemplateColumns="auto 1fr" gap="base" alignItems="start">
+        <s-box padding="small-200" borderRadius="base" background="subdued">
+          <s-icon type={done ? 'check-circle' : (STEP_ICON[step.key] ?? 'settings')} tone={iconTone} />
         </s-box>
         <s-stack gap="small-200">
           <s-stack direction="inline" gap="small" alignItems="center">
@@ -153,11 +152,12 @@ function SetupStep({ step, index }) {
 }
 
 const TILES = [
-  ['active', 'Active locations', 'location', 'Currently fulfilling or stocking orders in Shopify.'],
-  ['untyped', 'Need a type', 'alert-triangle', 'Active locations Nexora can’t route to yet because their type isn’t set.'],
-  ['store', 'Stores', 'store', 'Retail locations. Usually ship online orders and offer local pickup.'],
-  ['warehouse', 'Warehouses', 'inventory', 'Stock-holding locations that ship online orders.'],
-  ['third_party', 'Third-party', 'store-managed', 'Locations run by a fulfillment app or 3PL partner.'],
+  // Descriptions kept to a similar short length so every card wraps the same and the row stays even.
+  ['active', 'Active locations', 'location', 'success', 'Fulfilling or stocking orders now.'],
+  ['untyped', 'Need a type', 'alert-triangle', 'warning', 'Set a type so Nexora can route here.'],
+  ['store', 'Stores', 'store', 'info', 'Ship online and offer local pickup.'],
+  ['warehouse', 'Warehouses', 'inventory', 'info', 'Hold stock and ship online orders.'],
+  ['third_party', 'Third-party', 'store-managed', 'info', 'Run by a fulfillment app or 3PL.'],
 ];
 
 function LocationSummary({ counts }) {
@@ -167,8 +167,9 @@ function LocationSummary({ counts }) {
     <s-section heading="Your locations at a glance">
       <s-stack gap="base">
         <s-query-container>
-          <s-grid gridTemplateColumns="repeat(auto-fit, minmax(180px, 1fr))" gap="base">
-            {TILES.map(([key, label, icon, definition]) => {
+          {/* All five tiles in one row on a wide page; wraps gracefully on narrow screens. */}
+          <s-grid gridTemplateColumns="repeat(auto-fit, minmax(160px, 1fr))" gap="base">
+            {TILES.map(([key, label, icon, iconTone, definition]) => {
               const attention = key === 'untyped' && counts[key] > 0;
               return (
                 <s-clickable
@@ -181,12 +182,15 @@ function LocationSummary({ counts }) {
                   accessibilityLabel={`${label}: ${counts[key]}. ${definition} View locations.`}
                   onClick={() => navigate(`/locations?tab=${key}`)}
                 >
-                  <s-stack gap="small-200">
-                    <s-stack direction="inline" gap="small-200" alignItems="center">
-                      <s-icon type={icon} tone={attention ? 'warning' : 'subdued'} />
-                      <s-text type="strong">{label}</s-text>
+                  {/* space-between pushes the description to the bottom so the big number lines up across cards */}
+                  <s-stack gap="base" justifyContent="space-between" blockSize="100%">
+                    <s-stack gap="small-200">
+                      <s-stack direction="inline" gap="small-200" alignItems="center">
+                        <s-icon type={icon} tone={iconTone} />
+                        <s-text type="strong">{label}</s-text>
+                      </s-stack>
+                      <s-heading>{counts[key]}</s-heading>
                     </s-stack>
-                    <s-heading>{counts[key]}</s-heading>
                     <s-text color="subdued">{definition}</s-text>
                   </s-stack>
                 </s-clickable>
@@ -216,7 +220,7 @@ function HowItWorks() {
           {HOW.map(([icon, title, text, status]) => (
             <s-stack key={title} gap="small-200">
               <s-stack direction="inline" gap="small-200" alignItems="center">
-                <s-icon type={icon} tone="base" />
+                <s-icon type={icon} tone={status === 'Available now' ? 'info' : 'subdued'} />
                 <s-heading>{title}</s-heading>
               </s-stack>
               <s-badge tone={status === 'Available now' ? 'success' : 'neutral'}>{status}</s-badge>

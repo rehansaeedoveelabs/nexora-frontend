@@ -94,15 +94,15 @@ export default function Routing() {
     }
   }
 
-  if (state.status === 'loading') return <s-page heading="Routing"><LoadingState label="Loading routing…" /></s-page>;
+  if (state.status === 'loading') return <s-page heading="Routing" inlineSize="large"><LoadingState label="Loading routing…" /></s-page>;
   if (state.status === 'error') {
-    return <s-page heading="Routing"><ErrorState error={state.error} onRetry={() => setReloadKey((k) => k + 1)} /></s-page>;
+    return <s-page heading="Routing" inlineSize="large"><ErrorState error={state.error} onRetry={() => setReloadKey((k) => k + 1)} /></s-page>;
   }
 
   const locationsById = Object.fromEntries(state.locations.map((l) => [l.id, l]));
 
   return (
-    <s-page heading="Routing">
+    <s-page heading="Routing" inlineSize="large">
       {/* Shopify's contextual save bar. App Bridge floats it at the top of the admin when shown. */}
       <ui-save-bar id={SAVE_BAR_ID}>
         <button variant="primary" onClick={save} {...(saving ? { loading: '' } : {})}>Save</button>

@@ -117,7 +117,7 @@ export default function Locations() {
   });
 
   return (
-    <s-page heading="Locations">
+    <s-page heading="Locations" inlineSize="large">
       <s-button slot="secondary-actions" icon="refresh" loading={syncing} onClick={syncNow}>Sync from Shopify</s-button>
 
       <s-stack gap="base">
