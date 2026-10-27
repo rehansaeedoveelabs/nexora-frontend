@@ -182,8 +182,10 @@ function LocationSummary({ counts }) {
                   accessibilityLabel={`${label}: ${counts[key]}. ${definition} View locations.`}
                   onClick={() => navigate(`/locations?tab=${key}`)}
                 >
-                  {/* space-between pushes the description to the bottom so the big number lines up across cards */}
-                  <s-stack gap="base" justifyContent="space-between" blockSize="100%">
+                  {/* Fill the (equal-height) card and pin the description to the bottom, so the number
+                      rows align at the top and descriptions align at the bottom across all five cards,
+                      even when one wraps to two lines. Polaris can't express fill-height here. */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
                     <s-stack gap="small-200">
                       <s-stack direction="inline" gap="small-200" alignItems="center">
                         <s-icon type={icon} tone={iconTone} />
@@ -191,8 +193,10 @@ function LocationSummary({ counts }) {
                       </s-stack>
                       <s-heading>{counts[key]}</s-heading>
                     </s-stack>
-                    <s-text color="subdued">{definition}</s-text>
-                  </s-stack>
+                    <div style={{ marginTop: 'auto' }}>
+                      <s-text color="subdued">{definition}</s-text>
+                    </div>
+                  </div>
                 </s-clickable>
               );
             })}
