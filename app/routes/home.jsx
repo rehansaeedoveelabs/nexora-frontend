@@ -1,232 +1,206 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { api, toast } from '../lib/api.js';
-import { plural } from '../lib/format.js';
-import { Card, ErrorState, LoadingState } from '../components/states.jsx';
+import { dashboardService } from '../services/dashboard.js';
+import { capacityService } from '../services/capacity.js';
+import { LOCATION_TYPE_LABEL } from '../mocks/seed.js';
+import { date, number, percent, plural } from '../lib/format.js';
+import { ErrorState, LoadingState } from '../components/states.jsx';
+import { KpiCard, StatusBadge } from '../components/ui.jsx';
+import { LineChart, BarChart, Meter, SERIES } from '../components/charts.jsx';
+import { Select } from '../components/fields.jsx';
+import SetupPanel from '../components/SetupPanel.jsx';
 
-const POLL_MS = 3000;
-const MAX_POLLS = 40;
+const RANGES = [
+  { value: '7', label: 'Last 7 days' },
+  { value: '14', label: 'Last 14 days' },
+  { value: '30', label: 'Last 30 days' },
+];
 
 export default function Home() {
+  const navigate = useNavigate();
   const [state, setState] = useState({ status: 'loading' });
+  const [days, setDays] = useState('30');
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    let timer = null;
-    let polls = 0;
+    Promise.all([dashboardService.overview(Number(days)), capacityService.overview()])
+      .then(([dashboard, capacity]) => !cancelled && setState({ status: 'ready', dashboard, capacity }))
+      .catch((error) => !cancelled && setState({ status: 'error', error }));
+    return () => { cancelled = true; };
+  }, [days, reloadKey]);
 
-    async function load() {
-      try {
-        // Session first: on the very first open this call performs the install (token exchange).
-        const session = (await api.get('/session')).data;
-        const locations = await api.get('/locations');
-        if (cancelled) return;
+  if (state.status === 'loading') return <s-page heading="Fulfillment overview" inlineSize="large"><LoadingState label="Loading your overview…" /></s-page>;
+  if (state.status === 'error') return <s-page heading="Fulfillment overview" inlineSize="large"><ErrorState error={state.error} /></s-page>;
 
-        setState({ status: 'ready', session, counts: locations.meta.counts });
-
-        // While the first import runs, refresh until it finishes.
-        if (session.shop.syncing && polls++ < MAX_POLLS) timer = setTimeout(load, POLL_MS);
-      } catch (error) {
-        if (cancelled) return;
-        setState({ status: 'error', error });
-        toast(error.message, true);
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [reloadKey]);
-
-  if (state.status === 'loading') {
-    return <s-page heading="Home"><LoadingState label="Loading your store…" /></s-page>;
-  }
-
-  if (state.status === 'error') {
-    return <s-page heading="Home"><ErrorState error={state.error} onRetry={() => setReloadKey((k) => k + 1)} /></s-page>;
-  }
-
-  const { shop, setup } = state.session;
+  const { dashboard, capacity } = state;
+  const atRisk = capacity.rows.filter((row) => ['watch', 'overload'].includes(row.forecast));
+  const unconfigured = capacity.rows.filter((row) => row.forecast === 'unconfigured');
 
   return (
-    <s-page heading={shop.name ? `Welcome, ${shop.name}` : 'Home'} inlineSize="large">
-      <s-stack gap="large">
-        {shop.syncing && (
-          <s-banner tone="info" heading="Importing your locations from Shopify">
-            <s-paragraph>This usually takes a few seconds. This page updates automatically.</s-paragraph>
-          </s-banner>
-        )}
+    <s-page heading="Fulfillment overview" inlineSize="large">
+      <s-button slot="secondary-actions" onClick={() => setReloadKey((key) => key + 1)}>Refresh</s-button>
+      <s-button slot="secondary-actions" onClick={() => navigate('/orders')}>View orders</s-button>
 
-        {setup.is_complete ? (
-          <s-banner tone="success" heading="Your store is set up">
-            <s-paragraph>Every active location has a type and your routing is saved. You can change it any time.</s-paragraph>
-          </s-banner>
-        ) : (
-          <SetupGuide setup={setup} />
-        )}
+      <s-stack gap="base">
+        <s-banner tone="info" heading="Live Shopify data">
+          <s-paragraph>
+            Order counts and current fulfillment assignments come from Shopify for the selected period. Shopify order access is limited to the most recent 60 days. Routing history, carrier costs and fulfillment event history are not yet tracked.
+          </s-paragraph>
+        </s-banner>
 
-        <LocationSummary counts={state.counts} />
-        <HowItWorks />
+        <SetupPanel />
+
+        <s-stack direction="inline" gap="small" alignItems="center" justifyContent="end">
+          <s-text color="subdued">Showing</s-text>
+          <Select label="Date range" hideLabel value={days} options={RANGES} onChange={setDays} />
+        </s-stack>
+
+        <s-grid gridTemplateColumns="repeat(auto-fit, minmax(220px, 1fr))" gap="base">
+          <KpiCard label={`Orders created · ${dashboard.days} days`} value={number(dashboard.totals.orders)} onClick={() => navigate('/orders')} />
+          <KpiCard label="Currently assigned" value={number(dashboard.totals.assigned)} help="Orders with a current Shopify fulfillment location" onClick={() => navigate('/orders')} />
+          <KpiCard label="Currently unassigned" value={number(dashboard.totals.unassigned)} help="No current fulfillment location assignment" onClick={() => navigate('/orders')} />
+          <KpiCard label="Fulfilled" value={number(dashboard.totals.fulfilled)} help="Shopify fulfillment status" onClick={() => navigate('/orders')} />
+        </s-grid>
+
+        <s-grid gridTemplateColumns="repeat(auto-fit, minmax(320px, 1fr))" gap="base">
+          <s-section heading="Orders over time">
+            <s-stack gap="base">
+              <s-text color="subdued">Live, non-cancelled Shopify orders created each day and the subset currently assigned.</s-text>
+              <LineChart
+                labels={dashboard.trend.map((item) => item.label)}
+                series={[
+                  { name: 'Orders created', color: SERIES[0], values: dashboard.trend.map((item) => item.orders) },
+                  { name: 'Currently assigned', color: SERIES[1], values: dashboard.trend.map((item) => item.assigned) },
+                ]}
+                format={number}
+              />
+            </s-stack>
+          </s-section>
+
+          <s-section heading="Current assignment by location">
+            <s-stack gap="base">
+              <s-text color="subdued">Selected-period orders grouped by their current Shopify fulfillment location.</s-text>
+              <BarChart data={dashboard.distribution.map((item) => ({ label: item.name, value: item.value }))} format={number} />
+            </s-stack>
+          </s-section>
+        </s-grid>
+
+        <s-section heading="Location capacity today">
+          <CapacityTable rows={capacity.rows} onOpen={(id) => navigate(`/locations/${id}`)} />
+        </s-section>
+
+        <s-section heading="Recent orders">
+          <RecentOrders orders={dashboard.recentOrders} onOpen={(id) => navigate(`/orders/${id}`)} />
+        </s-section>
+
+        <s-section heading="Needs attention">
+          <NeedsAttention atRisk={atRisk} unconfigured={unconfigured} navigate={navigate} />
+        </s-section>
       </s-stack>
     </s-page>
   );
 }
 
-const STEP_ICON = {
-  sync_locations: 'location',
-  classify_locations: 'store',
-  safety_stock: 'inventory',
-  routing_rules: 'transfer',
-};
-
-const STEP_BADGE = {
-  complete: ['success', 'Done', 'check-circle'],
-  incomplete: ['warning', 'To do', 'incomplete'],
-  upcoming: ['neutral', 'Coming soon', 'clock'],
-};
-
-function SetupGuide({ setup }) {
-  const percent = setup.total ? Math.round((setup.completed / setup.total) * 100) : 0;
-
+function CapacityTable({ rows, onOpen }) {
   return (
-    <s-section heading="Get Nexora ready">
-      <s-stack gap="large">
-        <s-stack gap="small-200">
-          <s-stack direction="inline" gap="small" alignItems="center" justifyContent="space-between">
-            <s-text type="strong">{setup.completed} of {setup.total} steps done</s-text>
-            <s-text color="subdued">{percent}%</s-text>
-          </s-stack>
-          <s-progress value={setup.completed} max={setup.total} tone="success" accessibilityLabel="Setup progress" />
-          <s-text color="subdued">Checked against your real data, so a step is only marked done when it actually is.</s-text>
-        </s-stack>
-
-        <Card padding="none">
-          {setup.steps.map((step, index) => (
-            <Fragment key={step.key}>
-              {index > 0 && <s-divider />}
-              <SetupStep step={step} index={index} />
-            </Fragment>
-          ))}
-        </Card>
-      </s-stack>
-    </s-section>
-  );
-}
-
-function SetupStep({ step, index }) {
-  const navigate = useNavigate();
-  const [tone, label, badgeIcon] = STEP_BADGE[step.status] ?? STEP_BADGE.incomplete;
-  const showAction = step.action && step.status !== 'upcoming';
-  const done = step.status === 'complete';
-  // Coloured icon per state: green when done, blue while actionable, muted when upcoming.
-  const iconTone = done ? 'success' : step.status === 'upcoming' ? 'subdued' : 'info';
-
-  return (
-    <s-box padding="base" background={step.status === 'upcoming' ? 'subdued' : 'base'}>
-      {/* alignItems=start keeps the icon tile a neat square instead of stretching to the row height */}
-      <s-grid gridTemplateColumns="auto 1fr" gap="base" alignItems="start">
-        <s-box padding="small-200" borderRadius="base" background="subdued">
-          <s-icon type={done ? 'check-circle' : (STEP_ICON[step.key] ?? 'settings')} tone={iconTone} />
-        </s-box>
-        <s-stack gap="small-200">
-          <s-stack direction="inline" gap="small" alignItems="center">
-            <s-heading>{step.title}</s-heading>
-            <s-badge tone={tone} icon={badgeIcon}>{label}</s-badge>
-          </s-stack>
-          <s-paragraph color="subdued">{step.description}</s-paragraph>
-          <s-text type="strong">{step.detail}</s-text>
-          {showAction && (
-            <s-stack direction="inline">
-              <s-button variant={done ? 'tertiary' : 'primary'} onClick={() => navigate(step.action.url)}>
-                {step.action.label}
-              </s-button>
-            </s-stack>
-          )}
-        </s-stack>
-      </s-grid>
-    </s-box>
-  );
-}
-
-const TILES = [
-  // Descriptions kept to a similar short length so every card wraps the same and the row stays even.
-  ['active', 'Active locations', 'location', 'success', 'Fulfilling or stocking orders now.'],
-  ['untyped', 'Need a type', 'alert-triangle', 'warning', 'Set a type so Nexora can route here.'],
-  ['store', 'Stores', 'store', 'info', 'Ship online and offer local pickup.'],
-  ['warehouse', 'Warehouses', 'inventory', 'info', 'Hold stock and ship online orders.'],
-  ['third_party', 'Third-party', 'store-managed', 'info', 'Run by a fulfillment app or 3PL.'],
-];
-
-function LocationSummary({ counts }) {
-  const navigate = useNavigate();
-
-  return (
-    <s-section heading="Your locations at a glance">
-      <s-stack gap="base">
-        <s-query-container>
-          {/* All five tiles in one row on a wide page; wraps gracefully on narrow screens. */}
-          <s-grid gridTemplateColumns="repeat(auto-fit, minmax(160px, 1fr))" gap="base">
-            {TILES.map(([key, label, icon, iconTone, definition]) => {
-              const attention = key === 'untyped' && counts[key] > 0;
-              return (
-                <s-clickable
-                  key={key}
-                  border="base"
-                  borderColor={attention ? 'strong' : 'base'}
-                  borderRadius="large"
-                  padding="base"
-                  background={attention ? 'subdued' : 'base'}
-                  accessibilityLabel={`${label}: ${counts[key]}. ${definition} View locations.`}
-                  onClick={() => navigate(`/locations?tab=${key}`)}
-                >
-                  {/* Clean stat tile: icon + label + number, identical on every card so the row is
-                      always even. The description stays in accessibilityLabel for screen readers. */}
-                  <s-stack gap="small-200">
-                    <s-stack direction="inline" gap="small-200" alignItems="center">
-                      <s-icon type={icon} tone={iconTone} />
-                      <s-text type="strong">{label}</s-text>
-                    </s-stack>
-                    <s-heading>{counts[key]}</s-heading>
-                  </s-stack>
-                </s-clickable>
-              );
-            })}
-          </s-grid>
-        </s-query-container>
-        <s-text color="subdued">
-          {plural(counts.all, 'location')} in total, including {counts.inactive} inactive.
-        </s-text>
-      </s-stack>
-    </s-section>
-  );
-}
-
-const HOW = [
-  ['store', '1. Describe your locations', 'Tell Nexora which locations are stores, warehouses or third-party partners, and how many orders each can handle per day.', 'Available now'],
-  ['transfer', '2. Set your routing rules', 'Rank locations and add plain-language rules, like “ship fragile items only from warehouses”. Test them with the order simulator.', 'Available now'],
-  ['play', '3. Go live at checkout', 'Switch your rules on for real checkouts once Nexora’s checkout integration is enabled.', 'Next release'],
-];
-
-function HowItWorks() {
-  return (
-    <s-section heading="How Nexora works">
-      <s-query-container>
-        <s-grid gridTemplateColumns="repeat(auto-fit, minmax(240px, 1fr))" gap="large">
-          {HOW.map(([icon, title, text, status]) => (
-            <s-stack key={title} gap="small-200">
-              <s-stack direction="inline" gap="small-200" alignItems="center">
-                <s-icon type={icon} tone={status === 'Available now' ? 'info' : 'subdued'} />
-                <s-heading>{title}</s-heading>
+    <s-table>
+      <s-table-header-row>
+        <s-table-header listSlot="primary">Location</s-table-header>
+        <s-table-header>Type</s-table-header>
+        <s-table-header>Daily capacity</s-table-header>
+        <s-table-header>Assigned</s-table-header>
+        <s-table-header>Utilization</s-table-header>
+      </s-table-header-row>
+      <s-table-body>
+        {rows.map((r) => (
+          <s-table-row key={r.id}>
+            <s-table-cell>
+              <s-clickable onClick={() => onOpen(r.id)}><s-text type="strong">{r.name}</s-text></s-clickable>
+            </s-table-cell>
+            <s-table-cell><s-text color="subdued">{LOCATION_TYPE_LABEL[r.type] ?? 'Unclassified'}</s-text></s-table-cell>
+            <s-table-cell>{r.dailyCap == null ? 'Not set' : number(r.dailyCap)}</s-table-cell>
+            <s-table-cell>{number(r.ordersToday)}</s-table-cell>
+            <s-table-cell>
+              <s-stack gap="small-300">
+                <s-stack direction="inline" gap="small" alignItems="center" justifyContent="space-between">
+                  <s-text style={{ fontVariantNumeric: 'tabular-nums' }}>{r.utilization == null ? '—' : percent(r.utilization)}</s-text>
+                  <StatusBadge kind="forecast" value={r.forecast} />
+                </s-stack>
+                {r.utilization != null && <Meter value={r.utilization} label={`${r.name} utilization`} />}
               </s-stack>
-              <s-badge tone={status === 'Available now' ? 'success' : 'neutral'}>{status}</s-badge>
-              <s-paragraph color="subdued">{text}</s-paragraph>
-            </s-stack>
-          ))}
-        </s-grid>
-      </s-query-container>
-    </s-section>
+            </s-table-cell>
+          </s-table-row>
+        ))}
+      </s-table-body>
+    </s-table>
+  );
+}
+
+function RecentOrders({ orders, onOpen }) {
+  return (
+    <s-table>
+      <s-table-header-row>
+        <s-table-header listSlot="primary">Order</s-table-header>
+        <s-table-header>Date</s-table-header>
+        <s-table-header>Destination</s-table-header>
+        <s-table-header>Location</s-table-header>
+        <s-table-header listSlot="inline">Fulfillment</s-table-header>
+      </s-table-header-row>
+      <s-table-body>
+        {orders.map((o) => (
+          <s-table-row key={o.id}>
+            <s-table-cell>
+              <s-clickable onClick={() => onOpen(o.id)}><s-text type="strong">{o.number}</s-text></s-clickable>
+            </s-table-cell>
+            <s-table-cell>{date(o.date)}</s-table-cell>
+            <s-table-cell>{[o.destination.city, o.destination.country].filter(Boolean).join(', ') || '—'}</s-table-cell>
+            <s-table-cell>{o.assignedLocationName ?? <s-text color="subdued">Unassigned</s-text>}</s-table-cell>
+            <s-table-cell><StatusBadge kind="fulfillment" value={o.fulfillmentStatus} /></s-table-cell>
+          </s-table-row>
+        ))}
+      </s-table-body>
+    </s-table>
+  );
+}
+
+function NeedsAttention({ atRisk, unconfigured, navigate }) {
+  const items = [];
+  atRisk.forEach((r) => {
+    items.push([
+      r.forecast === 'overload' ? 'critical' : 'warning',
+      `${r.name} is ${r.forecast === 'overload' ? 'at overload risk' : 'nearing capacity'}`,
+      `${percent(r.utilization)} of its configured daily order limit is currently used.`,
+      'View location',
+      `/locations/${r.id}`,
+    ]);
+  });
+  if (unconfigured.length) {
+    items.push([
+      'warning',
+      `${plural(unconfigured.length, 'location has', 'locations have')} no daily order limit configured.`,
+      'Set a daily limit to include these locations in capacity utilization.',
+      'Manage locations',
+      '/locations',
+    ]);
+  }
+
+  if (items.length === 0) {
+    return (
+      <s-banner tone="success" heading="Nothing needs attention">
+        <s-paragraph>No configured location is at its capacity watch threshold.</s-paragraph>
+      </s-banner>
+    );
+  }
+
+  return (
+    <s-stack gap="base">
+      {items.map(([tone, heading, body, cta, url], i) => (
+        <s-banner key={i} tone={tone} heading={heading}>
+          <s-paragraph>{body}</s-paragraph>
+          <s-button slot="secondary-actions" onClick={() => navigate(url)}>{cta}</s-button>
+        </s-banner>
+      ))}
+    </s-stack>
   );
 }

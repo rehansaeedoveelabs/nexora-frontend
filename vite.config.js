@@ -21,6 +21,9 @@ export default defineConfig({
   plugins: [reactRouter(), shopifyEmbed],
   server: {
     port: 5173,
+    // Bind IPv4 explicitly: the default `localhost` resolved to IPv6 [::1] only on this machine,
+    // which cloudflared (reaching the origin over IPv4 127.0.0.1) couldn't serve → 502 through the tunnel.
+    host: '127.0.0.1',
     // One public tunnel: Vite serves the app and proxies the API to Laravel, so the whole app
     // (UI, API calls, webhooks) is one origin. No CORS, no second tunnel.
     proxy: {

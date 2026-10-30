@@ -4,7 +4,7 @@ export default function NotFound() {
   const navigate = useNavigate();
 
   return (
-    <s-page heading="Page not found">
+    <s-page heading="Page not found" inlineSize="large">
       <s-section>
         <s-stack gap="base">
           <s-paragraph>This page doesn’t exist in Nexora. It may have moved.</s-paragraph>

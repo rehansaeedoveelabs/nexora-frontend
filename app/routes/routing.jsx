@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { ApiError, api, toast } from '../lib/api.js';
 import { splitTags } from '../lib/format.js';
 import { Select, Switch, TextField } from '../components/fields.jsx';
@@ -42,6 +43,7 @@ const saveBar = {
 };
 
 export default function Routing() {
+  const navigate = useNavigate();
   const [state, setState] = useState({ status: 'loading' });
   const [draft, setDraft] = useState(null);
   const [saved, setSaved] = useState(null);
@@ -63,7 +65,15 @@ export default function Routing() {
   }, [reloadKey]);
 
   const dirty = useMemo(() => draft && saved && JSON.stringify(toPayload(draft)) !== JSON.stringify(saved), [draft, saved]);
+  // Ids that exist on the server, so the full-page editor can load them by id.
+  const savedIds = useMemo(() => new Set((saved?.rules ?? []).map((r) => r.id)), [saved]);
   const update = useCallback((patch) => setDraft((d) => ({ ...d, ...patch })), []);
+
+  // Navigate to the full-page editor, honouring the unsaved-changes save bar first.
+  const go = useCallback(async (url) => {
+    if (window.shopify?.saveBar?.leaveConfirmation) await window.shopify.saveBar.leaveConfirmation();
+    navigate(url);
+  }, [navigate]);
 
   // Drive the contextual save bar from the dirty state, and hide it when leaving the page.
   useEffect(() => {
@@ -103,13 +113,15 @@ export default function Routing() {
 
   return (
     <s-page heading="Routing" inlineSize="large">
+      <s-button slot="secondary-actions" icon="plus" onClick={() => go('/routing/new')}>New rule</s-button>
+
       {/* Shopify's contextual save bar. App Bridge floats it at the top of the admin when shown. */}
       <ui-save-bar id={SAVE_BAR_ID}>
         <button variant="primary" onClick={save} {...(saving ? { loading: '' } : {})}>Save</button>
         <button onClick={discard} {...(saving ? { disabled: '' } : {})}>Discard</button>
       </ui-save-bar>
 
-      <s-stack gap="large">
+      <s-stack gap="base">
         <s-paragraph color="subdued">
           Decide which location ships each order. Test any change with a sample order at the bottom of this page before you save it.
         </s-paragraph>
@@ -120,6 +132,15 @@ export default function Routing() {
             Until then, your orders route exactly as they do today.
           </s-paragraph>
         </s-banner>
+
+        <s-box border="base" borderRadius="large" padding="base" background="subdued">
+          <s-stack direction="inline" gap="base" alignItems="center">
+            <s-text type="strong">Routing setup</s-text>
+            <s-badge tone="success">{draft.rules.filter((rule) => rule.enabled).length} active rules</s-badge>
+            <s-badge>{draft.priority.length} locations prioritized</s-badge>
+            <s-badge>{draft.no_split ? 'Single-location shipments' : 'Split shipments allowed'}</s-badge>
+          </s-stack>
+        </s-box>
 
         {state.warnings.map((w) => (
           <s-banner key={w.code + (w.rule_id ?? '')} tone={w.tone}>
@@ -158,6 +179,8 @@ export default function Routing() {
           rules={draft.rules}
           locations={state.locations}
           errors={errors}
+          savedIds={savedIds}
+          onOpen={go}
           onChange={(rules) => update({ rules })}
         />
 
@@ -246,7 +269,7 @@ function PrioritySection({ priority, locationsById, notShipping, isPlus, onChang
   );
 }
 
-function RulesSection({ rules, locations, errors, onChange }) {
+function RulesSection({ rules, locations, errors, savedIds, onOpen, onChange }) {
   const set = (index, patch) => onChange(rules.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   const add = () => onChange([...rules, {
     id: newId(), enabled: true, tagsText: '', tags: [], action: 'only_from', location_types: ['warehouse'], location_ids: [],
@@ -275,6 +298,8 @@ function RulesSection({ rules, locations, errors, onChange }) {
             index={index}
             locations={locations}
             errors={errors}
+            canOpen={savedIds?.has(rule.id)}
+            onOpen={onOpen}
             onChange={(patch) => set(index, patch)}
             onDelete={() => onChange(rules.filter((_, i) => i !== index))}
           />
@@ -286,7 +311,7 @@ function RulesSection({ rules, locations, errors, onChange }) {
   );
 }
 
-function RuleCard({ rule, index, locations, errors, onChange, onDelete }) {
+function RuleCard({ rule, index, locations, errors, canOpen, onOpen, onChange, onDelete }) {
   const toggleIn = (list, value, on) => (on ? [...new Set([...list, value])] : list.filter((v) => v !== value));
   const tags = splitTags(rule.tagsText);
   const resolved = locations.filter((l) => rule.location_types.includes(l.type) || rule.location_ids.includes(l.id));
@@ -302,6 +327,9 @@ function RuleCard({ rule, index, locations, errors, onChange, onDelete }) {
           </s-stack>
           <s-stack direction="inline" gap="base" alignItems="center">
             <Switch label="On" checked={rule.enabled} onChange={(enabled) => onChange({ enabled })} />
+            {canOpen && (
+              <s-button variant="tertiary" onClick={() => onOpen(`/routing/${rule.id}`)}>Edit &amp; test</s-button>
+            )}
             <s-button variant="tertiary" tone="critical" icon="delete" accessibilityLabel={`Delete rule ${index + 1}`} onClick={onDelete} />
           </s-stack>
         </s-stack>
