@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigate } from 'react-router';
 import { SHOPIFY_API_KEY } from './config.js';
+import { VizStyles } from './components/charts.jsx';
 
 /**
  * The page shell, written in JSX (React Router turns it into index.html at build time).
@@ -15,6 +16,10 @@ export function Layout({ children }) {
         <meta name="shopify-api-key" content={SHOPIFY_API_KEY} />
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
         <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+        <style>{`
+          html, body { margin: 0; }
+          .nx-page-frame { box-sizing: border-box; width: 100%; max-width: 1208px; margin-inline: auto; padding-inline: 4px; }
+        `}</style>
         <title>Nexora</title>
         <Meta />
         <Links />
@@ -33,13 +38,23 @@ export default function App() {
 
   return (
     <>
-      {/* Admin sidebar menu under "Nexora", read by App Bridge. */}
+      <VizStyles />
+      {/* Shopify renders these text-only links in the Admin sidebar. The app name itself is Home. */}
       <s-app-nav>
-        <s-link href="/" rel="home">Home</s-link>
+        <s-link href="/" rel="home">Dashboard</s-link>
+        <s-link href="/orders">Orders</s-link>
         <s-link href="/locations">Locations</s-link>
         <s-link href="/routing">Routing</s-link>
+        <s-link href="/savings">Savings</s-link>
+        <s-link href="/capacity">Capacity</s-link>
+        <s-link href="/analytics">Analytics</s-link>
+        <s-link href="/automations">Automations</s-link>
+        <s-link href="/activity">Activity</s-link>
+        <s-link href="/settings">Settings</s-link>
       </s-app-nav>
-      <Outlet />
+      <div className="nx-page-frame">
+        <Outlet />
+      </div>
     </>
   );
 }
@@ -55,7 +70,7 @@ export function HydrateFallback() {
 
 export function ErrorBoundary({ error }) {
   return (
-    <s-page heading="Something went wrong">
+    <s-page heading="Something went wrong" inlineSize="large">
       <s-banner tone="critical" heading="Nexora hit an unexpected error">
         <s-paragraph>{error?.message ?? 'Reload the page to try again.'}</s-paragraph>
       </s-banner>

@@ -10,9 +10,17 @@ export function LoadingState({ label = 'Loading…' }) {
 }
 
 export function ErrorState({ error, onRetry }) {
+  const missingScopes = error?.body?.meta?.missing_scopes;
+
   return (
     <s-banner tone="critical" heading="We couldn’t load this page">
       <s-paragraph>{error?.message ?? 'Something went wrong.'}</s-paragraph>
+      {Array.isArray(missingScopes) && missingScopes.length > 0 && (
+        <s-stack gap="small-200">
+          <s-paragraph>Missing Shopify permissions: {missingScopes.join(', ')}.</s-paragraph>
+          <s-paragraph>Open Nexora from Shopify Admin and approve the permission update when prompted. Then select “Try again”. If Shopify does not show a permission prompt, ask your app administrator to confirm the latest app version is deployed.</s-paragraph>
+        </s-stack>
+      )}
       {onRetry && <s-button slot="secondary-actions" onClick={onRetry}>Try again</s-button>}
     </s-banner>
   );
