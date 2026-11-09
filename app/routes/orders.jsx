@@ -147,8 +147,7 @@ function OrdersTable({ rows, locations, onOpen, onActivity }) {
         <s-table-header>Items</s-table-header>
         <s-table-header>Location</s-table-header>
         <s-table-header>Ship cost</s-table-header>
-        <s-table-header>Routing</s-table-header>
-        <s-table-header>Nexora routing</s-table-header>
+        <s-table-header>Activity</s-table-header>
         <s-table-header listSlot="inline">Fulfillment</s-table-header>
       </s-table-header-row>
       <s-table-body>

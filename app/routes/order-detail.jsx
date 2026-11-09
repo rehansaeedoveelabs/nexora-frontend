@@ -91,6 +91,18 @@ export default function OrderDetail() {
               <s-paragraph>Shopify has not assigned a fulfillment location to this order.</s-paragraph>
             </s-banner>
           )}
+          {(o.fulfillmentOrders ?? []).length > 0 && (
+            <s-box paddingBlockStart="base">
+              <DetailList rows={(o.fulfillmentOrders ?? []).map((fulfillmentOrder, index) => [
+                `Fulfillment order ${index + 1}`,
+                [
+                  fulfillmentOrder.status ?? 'Unknown status',
+                  fulfillmentOrder.requestStatus ? `request ${fulfillmentOrder.requestStatus}` : null,
+                  fulfillmentOrder.assignedLocationName,
+                ].filter(Boolean).join(' · '),
+              ])} />
+            </s-box>
+          )}
         </s-section>
 
         <s-section heading="Reassign fulfillment">
@@ -148,6 +160,8 @@ export default function OrderDetail() {
               ['Assigned location', o.assignedLocationName ?? 'Unassigned'],
               ['Shipping charge', o.shippingEstimate != null ? money(o.shippingEstimate, { currency: o.currency, cents: true }) : 'Not available'],
               ['Fulfillment locations', number(o.shipments.length)],
+              ['Reassignment', o.reassignment?.eligible ? 'Eligible' : (o.reassignment?.reason ?? 'Not eligible')],
+              ['Nexora routing record', o.routingStatus === 'not_recorded' ? 'Not recorded on this order — check Activity' : (o.routingStatus ?? 'Unknown')],
             ]} />
           </s-section>
         </s-grid>
