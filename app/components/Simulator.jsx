@@ -23,7 +23,7 @@ const FIELD_GRID = 'repeat(auto-fit, minmax(180px, 1fr))';
  * "Test an order": runs a sample order through the routing engine with the CURRENT (unsaved)
  * settings and explains, in sentences, where it ships and why every other location was skipped.
  */
-export function Simulator({ locations, draftPayload, isPlus }) {
+export function Simulator({ locations, draftPayload }) {
   const [destination, setDestination] = useState({ country: 'US', province: '' });
   const [lines, setLines] = useState(() => [newLine(locations)]);
   const [result, setResult] = useState(null);
@@ -134,13 +134,13 @@ export function Simulator({ locations, draftPayload, isPlus }) {
           <s-button variant="primary" icon="play" loading={running} onClick={run}>Run test</s-button>
         </s-stack>
 
-        {result && <SimulationResult result={result} isPlus={isPlus} />}
+        {result && <SimulationResult result={result} />}
       </s-stack>
     </s-section>
   );
 }
 
-function SimulationResult({ result, isPlus }) {
+function SimulationResult({ result }) {
   return (
     <s-stack gap="base">
       <s-divider />
@@ -150,10 +150,10 @@ function SimulationResult({ result, isPlus }) {
         <s-banner key={w.code + (w.rule_id ?? '')} tone="critical"><s-paragraph>{w.message}</s-paragraph></s-banner>
       ))}
 
-      {!isPlus && result.outcome !== 'blocked' && (
+      {result.outcome !== 'blocked' && (
         <s-paragraph color="subdued">
-          On your plan, Shopify may pick a different location among those that can ship this order. Your product rules and
-          “keep orders together” setting still apply.
+          At checkout, Shopify chooses among eligible locations using your store’s Shopify order-routing settings. This
+          simulator’s location priority is the one Nexora’s automatic routing uses.
         </s-paragraph>
       )}
 

@@ -49,6 +49,7 @@ export default function Routing() {
   const [saved, setSaved] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -104,12 +105,54 @@ export default function Routing() {
     }
   }
 
+  async function checkCheckoutSync() {
+    setSyncing(true);
+    try {
+      const { data } = await api.get('/routing');
+      setState((current) => ({ ...current, checkout_sync: data.checkout_sync }));
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function retryCheckoutSync() {
+    setSyncing(true);
+    try {
+      const { data } = await api.post('/routing/sync');
+      setState((current) => ({ ...current, checkout_sync: data.checkout_sync }));
+      toast(data.checkout_sync.status === 'synced' ? 'Checkout rules synced' : 'Checkout sync queued');
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   if (state.status === 'loading') return <s-page heading="Routing" inlineSize="large"><LoadingState label="Loading routing…" /></s-page>;
   if (state.status === 'error') {
     return <s-page heading="Routing" inlineSize="large"><ErrorState error={state.error} onRetry={() => setReloadKey((k) => k + 1)} /></s-page>;
   }
 
   const locationsById = Object.fromEntries(state.locations.map((l) => [l.id, l]));
+  const checkoutSync = state.checkout_sync ?? { status: 'not_configured' };
+  const checkoutSyncTone = checkoutSync.status === 'synced'
+    ? 'success'
+    : checkoutSync.status === 'failed'
+      ? 'critical'
+      : checkoutSync.status === 'pending' || checkoutSync.status === 'not_synced'
+        ? 'warning'
+        : 'info';
+  const checkoutSyncHeading = checkoutSync.status === 'synced'
+    ? 'Checkout rules are active'
+    : checkoutSync.status === 'failed'
+      ? 'Checkout sync needs attention'
+      : checkoutSync.status === 'not_synced'
+        ? 'Checkout sync has not run yet'
+      : checkoutSync.status === 'pending'
+        ? 'Checkout sync is in progress'
+        : 'Checkout rules are not set up yet';
 
   return (
     <s-page heading="Routing" inlineSize="large">
@@ -126,11 +169,28 @@ export default function Routing() {
           Decide which location ships each order. Test any change with a sample order at the bottom of this page before you save it.
         </s-paragraph>
 
-        <s-banner tone="info" heading="Rules are saved and testable now">
+        <s-banner tone={checkoutSyncTone} heading={checkoutSyncHeading}>
           <s-paragraph>
-            They start applying to real checkouts when Nexora’s checkout integration is switched on in the next release.
-            Until then, your orders route exactly as they do today.
+            {checkoutSync.status === 'synced'
+              ? 'Product-tag restrictions and the keep-orders-together setting are active at checkout. Shopify chooses among eligible locations using your store’s order-routing settings; Nexora’s priority list guides Nexora’s automatic routing and simulator.'
+              : checkoutSync.status === 'failed'
+                ? checkoutSync.error ?? 'Shopify did not accept the checkout configuration. Check app permissions and that the fulfillment-constraints Function is deployed, then retry.'
+                : checkoutSync.status === 'not_synced'
+                  ? 'Your routing settings are saved, but have not yet been sent to Shopify. Start the sync to apply product restrictions and keep-orders-together rules at checkout.'
+                : checkoutSync.status === 'pending'
+                  ? 'Your settings are saved. Nexora is applying product restrictions and keep-orders-together rules to Shopify checkout.'
+                  : 'Save your routing settings to install the checkout rules. Product restrictions and keep-orders-together rules will apply at checkout after Shopify accepts the configuration.'}
           </s-paragraph>
+          {(checkoutSync.status === 'pending' || checkoutSync.status === 'failed' || checkoutSync.status === 'not_synced') && (
+            <s-button
+              variant="secondary"
+              loading={syncing}
+              disabled={syncing}
+              onClick={checkoutSync.status === 'pending' ? checkCheckoutSync : retryCheckoutSync}
+            >
+              {checkoutSync.status === 'failed' ? 'Retry sync' : checkoutSync.status === 'not_synced' ? 'Sync now' : 'Check status'}
+            </s-button>
+          )}
         </s-banner>
 
         <s-box border="base" borderRadius="large" padding="base" background="subdued">
@@ -152,7 +212,6 @@ export default function Routing() {
           priority={draft.priority}
           locationsById={locationsById}
           notShipping={state.not_shipping}
-          isPlus={state.plan.is_plus}
           onChange={(priority) => update({ priority })}
         />
 
@@ -184,13 +243,13 @@ export default function Routing() {
           onChange={(rules) => update({ rules })}
         />
 
-        <Simulator locations={state.locations} draftPayload={toPayload(draft)} isPlus={state.plan.is_plus} />
+        <Simulator locations={state.locations} draftPayload={toPayload(draft)} />
       </s-stack>
     </s-page>
   );
 }
 
-function PrioritySection({ priority, locationsById, notShipping, isPlus, onChange }) {
+function PrioritySection({ priority, locationsById, notShipping, onChange }) {
   // Only ids that are still shipping locations are shown and moved (stale ids are dropped).
   const rows = priority.map((id) => locationsById[id]).filter(Boolean);
 
@@ -210,15 +269,12 @@ function PrioritySection({ priority, locationsById, notShipping, isPlus, onChang
           Locations that are out of stock or blocked by a rule are skipped automatically.
         </s-paragraph>
 
-        {!isPlus && (
-          <s-banner tone="info">
-            <s-paragraph>
-              Shopify only lets apps enforce this order at checkout on Shopify Plus. On your plan, Shopify chooses between the
-              locations that pass your rules using your Shopify order routing settings. Your product rules and
-              “keep orders together” still apply on every plan.
-            </s-paragraph>
-          </s-banner>
-        )}
+        <s-banner tone="info">
+          <s-paragraph>
+            This priority guides Nexora’s automatic order routing and simulator. At checkout, Shopify chooses among locations
+            allowed by your rules using your store’s Shopify order-routing settings.
+          </s-paragraph>
+        </s-banner>
 
         <Card padding="none">
           {rows.map((location, index) => (

@@ -23,7 +23,10 @@ export default [
 
   route('settings', 'routes/settings.jsx'),
   route('settings/fulfillment', 'routes/settings.jsx', { id: 'settings-fulfillment' }),
+  route('settings/capacity', 'routes/settings.jsx', { id: 'settings-capacity' }),
+  route('settings/routing', 'routes/settings.jsx', { id: 'settings-routing' }),
   route('settings/notifications', 'routes/settings.jsx', { id: 'settings-notifications' }),
+  route('settings/advanced', 'routes/settings.jsx', { id: 'settings-advanced' }),
   route('settings/billing', 'routes/settings.jsx', { id: 'settings-billing' }),
 
   route('*', 'routes/not-found.jsx'),

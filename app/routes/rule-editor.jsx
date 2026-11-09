@@ -190,13 +190,13 @@ export default function RuleEditor() {
           </s-stack>
         </s-box>
         <s-paragraph color="subdued">
-          Control where products with specific tags ship from. Rules apply on every Shopify plan and
-          start affecting real checkouts when Nexora’s checkout integration is switched on.
+          Control where products with specific tags ship from. Saving this rule queues the checkout
+          configuration sync; you can see its status and retry it from the Routing page.
         </s-paragraph>
 
         <RuleForm draft={draft} locations={state.locations} errors={errors} onChange={update} />
 
-        <Simulator locations={state.locations} draftPayload={payload} isPlus={state.plan.is_plus} />
+        <Simulator locations={state.locations} draftPayload={payload} />
       </s-stack>
     </s-page>
   );

@@ -30,8 +30,26 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [days, reloadKey]);
 
-  if (state.status === 'loading') return <s-page heading="Fulfillment overview" inlineSize="large"><LoadingState label="Loading your overview…" /></s-page>;
-  if (state.status === 'error') return <s-page heading="Fulfillment overview" inlineSize="large"><ErrorState error={state.error} /></s-page>;
+  if (state.status === 'loading') {
+    return (
+      <s-page heading="Fulfillment overview" inlineSize="large">
+        <s-stack gap="base">
+          <SetupPanel />
+          <LoadingState label="Loading your overview…" />
+        </s-stack>
+      </s-page>
+    );
+  }
+  if (state.status === 'error') {
+    return (
+      <s-page heading="Fulfillment overview" inlineSize="large">
+        <s-stack gap="base">
+          <SetupPanel />
+          <ErrorState error={state.error} />
+        </s-stack>
+      </s-page>
+    );
+  }
 
   const { dashboard, capacity } = state;
   const atRisk = capacity.rows.filter((row) => ['watch', 'overload'].includes(row.forecast));
